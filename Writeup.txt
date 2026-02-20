@@ -1,0 +1,81 @@
+WRITEUP — She Speaks Power Challenge BY JOSEPH CASTILLO
+===============================================
+
+Part A — Network Forensics (PCAP) → recover the ZIP (base64)
+-----------------------------------------------------------
+1) Open capture_full_noise.pcap in Wireshark.
+2) Filter:
+     http
+   or search for the host:
+     frame contains "files.ssp.local"
+3) Find the HTTP transaction to:
+     GET /drops/vault
+   (Use Follow → TCP Stream).
+4) In the server response, you'll see a large base64 block.
+   Copy ONLY the base64 (no HTTP headers) into a file, e.g.:
+     info.b64
+5) Decode it:
+     base64 -d info.b64 > info_drop.zip
+
+Part B — Forensics (EXIF) → OSINT → ZIP password
+------------------------------------------------
+6) Extract GPS from the photo:
+     exiftool photo_drop.jpg | grep -i gps
+   or numeric:
+     exiftool -gpslatitude -gpslongitude -n photo_drop.jpg
+7) Open Google Maps using the coordinates (example):
+     https://www.google.com/maps/@9.9334,-84.0789,18z
+8) Identify the big/visible monument at that point.
+   Take its name EXACTLY as shown by Maps.
+9) Normalize it:
+     - UPPERCASE
+     - remove spaces
+     - remove accents
+   This becomes the ZIP password.
+   (Expected: TEATRONACIONALDECOSTARICA)
+
+10) Unzip using password:
+     unzip -P TEATRONACIONALDECOSTARICA vault_drop.zip -d vault/
+
+Part C — Stego #1 (PNG) → USER pivot
+-----------------------------------
+11) Inside vault/, open the file:
+      02_signal_USER.png
+    Use zsteg:
+      zsteg -a 02_signal_USER.png
+    You should find a string like:
+      USER=CTFNN
+    and a hint:
+      maybe a previous version?
+
+Part D — OSINT (username) + Wayback → final password
+----------------------------------------------------
+12) Run:
+      maigret CTFNN
+    Identify the GitHub profile link.
+13) Open the GitHub README.
+    It will hint "maybe a previous version?"
+14) Go to:
+      https://web.archive.org/
+    Paste the README URL and open an older snapshot.
+    The older version says to:
+      add 2026 to the previous password
+
+    Final password becomes:
+      TEATRONACIONALDECOSTARICA2026
+
+Part E — Stego #2 (real steghide) → Base64 → CyberChef
+-------------------------------------------------------
+15) In the vault, you will find:
+      01_locked_payload_STEG.jpg
+    Extract the embedded file using steghide with the final password:
+      steghide extract -sf 01_locked_payload_STEG.jpg -p TEATRONACIONALDECOSTARICA2026
+
+    This outputs:
+      flag_b64.txt
+
+16) Open flag_b64.txt — it contains a Base64 string.
+    Decode it in CyberChef (From Base64) to recover:
+      flag{SHESPEAKSPOWER}
+
+
